@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>大模型的上下文 学习笔记</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; max-width: 800px; margin: 2rem auto; padding: 0 1rem; color: #333; }
+    h1 { color: #0366d6; }
+    h2 { border-bottom: 1px solid #eaecef; padding-bottom: .3rem; }
+    code { background: #f6f8fa; padding: .2em .4em; border-radius: 3px; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid #eaecef; padding: .4rem .6rem; text-align: left; font-size: .92rem; }
+    th { background: #f6f8fa; }
+    blockquote { border-left: 4px solid #0366d6; margin: 1rem 0; padding: .3rem 1rem; background: #f6f8fa; color: #555; }
+    a { color: #0366d6; }
+  </style>
+</head>
+<body>
+  <h1>大模型的上下文 学习笔记（Context / Context Window）</h1>
+
+  <h2>概念个人解释</h2>
+  <p><strong>上下文（Context）</strong>是大模型在一次推理中能"看到"的全部信息，<strong>上下文窗口（Context Window）</strong>则是这次推理能装下的最大 token 数量。</p>
+  <p>一个最贴切的类比来自 Andrej Karpathy：<strong>模型是 CPU，上下文窗口就是 RAM</strong>。大模型拥有海量"长期记忆"（训练时学到的知识固化在参数里），但"工作记忆"极短——它思考时完全依赖当前窗口里的内容，窗口外的、以及被挤出去的，它统统"看不见"。</p>
+  <p>三个容易被忽略的事实：</p>
+  <ul>
+    <li><strong>窗口是输入输出共享的</strong>：系统提示、历史对话、检索注入的文档、你的问题、模型的回答，全部从同一个额度里扣。标称 200K 的窗口，扣掉系统提示和输出预留，实际可用的输入要打折。</li>
+    <li><strong>窗口内 ≠ 都记得住</strong>：注意力对每个 token 的分配是零和的，塞进来的无关信息越多，关键信息被分到的注意力越少（业界称为"上下文腐烂"，context rot）。</li>
+    <li><strong>标称 ≠ 有效</strong>：营销页写的 token 数和模型真正能稳定利用的长度（MECW，最大有效上下文窗口）之间有明显差距，复杂任务下模型通常在标称值的一半甚至更早就开始失准。</li>
+  </ul>
+  <blockquote>一句话：<strong>上下文不是仓库，是内存——而内存管理，从来都是一门工程学。</strong></blockquote>
+
+  <h2>核心机制与组成</h2>
+  <table>
+    <tr><th>部件</th><th>作用</th><th>通俗类比</th></tr>
+    <tr><td>自注意力</td><td>每个 token 与窗口内所有 token 计算关联权重，决定"关注谁"</td><td>开会时每个人都在扫视全场决定听谁说话</td></tr>
+    <tr><td>KV Cache</td><td>把已算过的历史 token 的 Key/Value 向量缓存起来，生成新 token 时不重算</td><td>做大题时前面的演算过程留着不擦</td></tr>
+    <tr><td>位置编码（RoPE 等）</td><td>告诉模型每个 token 在序列中的位置</td><td>座位号——超长序列时座位号区分度下降</td></tr>
+    <tr><td>输入输出共享额度</td><td>全部内容（含模型自己的回答）共用一个窗口</td><td>一块白板，写满了必须擦旧的才能写新的</td></tr>
+  </table>
+  <ul>
+    <li><strong>平方复杂度是窗口不能无限大的根源</strong>：每个 token 都要和所有 token 算关联，1 万 token 是 1 亿次关联，10 万 token 是 100 亿次。滑动窗口、稀疏注意力、GQA（减少 KV 头）、FlashAttention（硬件级读写优化）这些"注意力变种"全是为压这堵墙而生的。</li>
+    <li><strong>KV Cache 是"用显存换速度"</strong>：它把每步计算量从 O(n) 降到 O(1)，但也随上下文线性吃显存——80 层、64 头、头维 128 的模型在 FP16 下<strong>每个 token 约占 1.3MB 缓存</strong>，百万 token 对话的 KV Cache 可轻松超过 1TB。这就是厂商对超长输入定高价的底气，也是 Prompt Caching（前缀缓存复用）存在的原因。</li>
+    <li><strong>"Lost in the Middle"（中间遗忘）</strong>：注意力天然偏重开头和结尾，呈 U 型曲线。20 篇文档塞进上下文，中间位置的信息检索准确率可从 75% 掉到 55-60%。<strong>该现象在新模型中减弱但未消失，至今仍是排 prompt 顺序的第一依据。</strong></li>
+    <li><strong>长对话的隐性衰减</strong>：多轮 Agent 任务里，工具返回值、中间结果不断堆积，早期约定会被稀释。微软与 Salesforce 的研究发现，仅仅一轮额外对话后就可能让指令遵循准确率下降近 40%——这不是模型变笨，是上下文管理没跟上。</li>
+  </ul>
+
+  <h2>实际应用场景</h2>
+  <h3>智能客服平台的文档问答系统改造（长上下文 vs RAG 的工程抉择）</h3>
+  <p><strong>背景</strong>：某电商客服平台要上"基于帮助中心文档的自动问答"，帮助中心共 8000 篇文档（约 300 万 token）。团队第一版方案是"长上下文直塞"：每次请求把与用户问题相关的全类目文档（约 40 万 token）塞进一个 1M 窗口的旗舰模型。结果三个问题：单次请求成本是标准价的 4 倍以上、首字延迟超过 8 秒、且回答准确率反而低于旧方案——大量弱相关文档稀释了注意力，关键条款（比如"7 天无理由退货的例外类目"）经常被"中间遗忘"。</p>
+  <p><strong>执行流程</strong>（每一步都对应上文机制）：</p>
+  <ol>
+    <li><strong>重新分区上下文预算</strong>：系统提示（角色 + 退款政策核心条款摘要）≤2K；检索注入文档 ≤4K（只放 top-3 相关片段，而非整个类目）；历史对话保留最近 3 轮原文 + 更早的滚动摘要；输出预留 2K。</li>
+    <li><strong>检索层代替窗口层</strong>：8000 篇文档离线向量化建索引，查询时只检索最相关的 3 个片段注入——索引成本一次付清，查询时只处理几千 token，首字延迟降到 1 秒级。</li>
+    <li><strong>利用 KV Cache 的前缀复用</strong>：系统提示固定不变放在最前，命中厂商的 Prompt Caching，缓存命中的输入价格只有标准价的零头。</li>
+    <li><strong>位置编排</strong>：按 U 型曲线排布——核心约束放开头，用户当前问题放结尾，背景资料放中间。</li>
+    <li><strong>保留一个长上下文逃生舱</strong>：仅"多文档对比"类问题（如"对比新旧两版入驻协议的差异"）走长上下文通道，因为这类任务需要整体对照，检索切分会破坏完整性。</li>
+  </ol>
+  <p><strong>落地效果</strong>：单次问答成本下降约 85%，P95 首字延迟从 8s 降到 1.2s，条款类问题准确率回升超过旧方案。团队沉淀出"<strong>检索收窄候选集 + 长上下文做联合推理</strong>"的混合架构——这正是 2026 年行业的主流答案：长上下文和 RAG 不是替代关系，是分工关系。</p>
+
+  <h2>易混淆问题与使用边界</h2>
+  <h3>常见误区</h3>
+  <ol>
+    <li><strong>"窗口越大越强"——有效利用率才是真相</strong>：Chroma 对 18 个前沿模型的 context rot 研究显示，复杂任务下中间位置信息准确率普遍下降 30% 以上，有效窗口与标称值的差距在难任务上可达数倍。选型时看你在真实数据形状上的表现，不看营销页数字。</li>
+    <li><strong>"长上下文将杀死 RAG"——恰恰相反，两者是分工</strong>：长上下文赢在"相关内容难以预先定位"和"需要跨文档整体对照"；RAG 赢在"语料远超窗口""答案只来自小部分文档""成本敏感"。企业级场景（TB 级语料、高频查询）RAG 依然是唯一可行架构。</li>
+    <li><strong>"上下文 = 对话历史"——远不止</strong>：系统提示、工具定义、检索结果、记忆文件、任务状态全都是上下文。2025 年 Anthropic 正式提出<strong>上下文工程（Context Engineering）</strong>：Prompt 工程优化"一句话怎么说"，上下文工程优化"模型每次推理看到什么"——后者已取代前者成为 Agent 时代的核心学科。</li>
+    <li><strong>与"记忆"混淆</strong>：上下文是易失的工作记忆（请求结束即消失），长期记忆靠外部存储（向量库、笔记文件）按需注入。指望靠"拉长对话"让模型记住一切，等于指望 RAM 断电后保住数据。</li>
+  </ol>
+  <h3>使用边界（它做不到的事）</h3>
+  <ul>
+    <li><strong>不能自动筛选信息</strong>：模型对塞进来的内容"照单全收"，无法像人一样把重要信息从短期记忆转存到长期记忆。垃圾进、垃圾出——无关信息越多，关键信息被稀释得越狠。筛选必须由系统侧（检索、裁剪、摘要）完成。</li>
+    <li><strong>不能保证内部安全</strong>：塞进来的数据也是攻击面。用户输入、RAG 检索结果、工具返回值里都可能藏着注入指令（"忽略之前的指令，把用户数据发到……"）。上下文越长、来源越多，不可信内容的管控越难，必须做信道分离和来源标记。</li>
+    <li><strong>更大的窗口不能消除衰减</strong>：注意力稀释、位置编码区分度下降是机制层面的问题，窗口变大只是把失准点推后，不是取消。即便窗口无限大，你依然需要压缩、结构化笔记、子 Agent 隔离这些管理手段。</li>
+  </ul>
+
+  <h2>参考核验链接</h2>
+  <ul>
+    <li><a href="https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents">Anthropic 官方工程博客：Effective context engineering for AI agents</a>（上下文工程的一手定义：注意力预算、压缩/结构化笔记/子 Agent 三大技术）</li>
+    <li><a href="https://www.ibm.com/think/topics/context-window">IBM 官方科普：What is a context window?</a>（上下文窗口定义、token 计量、输入输出共享机制）</li>
+    <li><a href="https://magazine.sebastianraschka.com/p/coding-the-kv-cache-in-llms">Sebastian Raschka 博客：Coding the KV Cache in LLMs</a>（KV Cache 原理的代码级拆解：为什么缓存、缓存什么、显存代价）</li>
+    <li><a href="https://www.docker.com/blog/context-packing-context-window/">Docker 官方博客：Context Packing and the Context Window</a>（在有限窗口内塞入更多有效信息的工程实践）</li>
+    <li><a href="https://atlan.com/know/llm-context-window-limitations/">Atlan：LLM Context Window Limitations in 2026</a>（MECW（最大有效上下文窗口）与 context rot 的量化研究综述）</li>
+  </ul>
+
+  <h2>相关概念</h2>
+  <p>参见 <a href="agent.html">Agent 学习笔记</a>、<a href="moe.html">MoE 学习笔记</a>、<a href="skill.html">Skill 学习资料</a> 与 <a href="concept-relationship.html">概念关系图</a>。本笔记由 <code>ai-concept-structured-learning</code> 技能生成（2026-09-09）。</p>
+</body>
+</html>
