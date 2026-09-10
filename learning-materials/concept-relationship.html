@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>概念关系：LLM Context × Agent × Skill</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; max-width: 860px; margin: 2rem auto; padding: 0 1rem; color: #333; }
+    h1 { color: #0366d6; }
+    h2 { border-bottom: 1px solid #eaecef; padding-bottom: .3rem; margin-top: 2.2rem; }
+    h3 { margin-top: 1.6rem; }
+    code { background: #f6f8fa; padding: .2em .4em; border-radius: 3px; }
+    ul li, ol li { margin: .5rem 0; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .95rem; }
+    th, td { border: 1px solid #dfe2e5; padding: .5rem .7rem; text-align: left; vertical-align: top; }
+    th { background: #f6f8fa; }
+    .relationship { background: #f6f8fa; padding: 1rem 1.2rem; border-left: 4px solid #0366d6; margin: 1rem 0; }
+    .key { background: #fff8e6; border-left: 4px solid #d4a72c; padding: .8rem 1.2rem; margin: 1rem 0; }
+    .pitfall { background: #fdf0f0; border-left: 4px solid #cf222e; padding: .8rem 1.2rem; margin: 1rem 0; }
+    .figure { background: #fff; border: 1px solid #eaecef; border-radius: 6px; padding: 1rem; margin: 1.2rem 0; text-align: center; }
+    .figure figcaption { font-size: .9rem; color: #57606a; margin-top: .5rem; }
+    .tag { display: inline-block; background: #ddf4ff; color: #0969da; border-radius: 10px; padding: 0 .6rem; font-size: .85rem; margin-right: .3rem; }
+    blockquote { border-left: 4px solid #d0d7de; margin: 1rem 0; padding: .3rem 1rem; color: #57606a; background: #f6f8fa; }
+  </style>
+</head>
+<body>
+  <h1>概念关系：LLM Context × Agent × Skill</h1>
+  <p>本页是四份学习笔记的"合龙"：说明 <strong>大模型上下文（LLM Context）</strong>、<strong>Agent</strong>、<strong>Skill</strong> 三个概念如何互相咬合，重点回答两个问题——<em>上下文如何决定 Agent 的工作质量</em>，以及 <em>Skill 如何把任务经验沉淀成可复用的资产</em>。</p>
+
+  <h2>一、一句话总览</h2>
+  <div class="relationship">
+    <p><strong>Agent 是循环决策的"人"，上下文是它每次决策时眼前唯一的"桌面"，Skill 是把成功经验固化后、可以随时摆上桌面的"操作手册"。</strong></p>
+    <p>三者关系可以压缩成一条链：<code>Skill（知识资产） → 注入 → Context（单次推理的视野） → 驱动 → Agent（循环决策） → 执行结果与新经验 → 反哺 → Skill（再沉淀）</code></p>
+  </div>
+
+  <figure class="figure">
+    <svg viewBox="0 0 760 380" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#57606a"/>
+        </marker>
+        <marker id="arrBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#0969da"/>
+        </marker>
+      </defs>
+      <!-- 用户 -->
+      <rect x="20" y="160" width="110" height="56" rx="8" fill="#f6f8fa" stroke="#8b949e"/>
+      <text x="75" y="183" text-anchor="middle" font-size="13" fill="#24292f">用户</text>
+      <text x="75" y="201" text-anchor="middle" font-size="11" fill="#57606a">提出目标</text>
+
+      <!-- Agent -->
+      <rect x="300" y="140" width="160" height="96" rx="10" fill="#ddf4ff" stroke="#0969da" stroke-width="2"/>
+      <text x="380" y="168" text-anchor="middle" font-size="14" font-weight="bold" fill="#0969da">Agent</text>
+      <text x="380" y="188" text-anchor="middle" font-size="11" fill="#24292f">循环：观察 → 推理 → 行动</text>
+      <text x="380" y="206" text-anchor="middle" font-size="11" fill="#24292f">（LLM 驱动的决策引擎）</text>
+      <text x="380" y="224" text-anchor="middle" font-size="11" fill="#57606a">会话级生命周期</text>
+
+      <!-- Context -->
+      <rect x="300" y="20" width="160" height="80" rx="10" fill="#fff8e6" stroke="#d4a72c" stroke-width="2"/>
+      <text x="380" y="48" text-anchor="middle" font-size="14" font-weight="bold" fill="#9a6700">LLM Context</text>
+      <text x="380" y="68" text-anchor="middle" font-size="11" fill="#24292f">系统提示 + Skill 指令 + 历史</text>
+      <text x="380" y="84" text-anchor="middle" font-size="11" fill="#24292f">+ 工具定义 + 记忆</text>
+
+      <!-- Skill -->
+      <rect x="300" y="280" width="160" height="80" rx="10" fill="#dafbe1" stroke="#1a7f37" stroke-width="2"/>
+      <text x="380" y="308" text-anchor="middle" font-size="14" font-weight="bold" fill="#1a7f37">Skill</text>
+      <text x="380" y="328" text-anchor="middle" font-size="11" fill="#24292f">SKILL.md + 脚本/模板</text>
+      <text x="380" y="344" text-anchor="middle" font-size="11" fill="#57606a">跨会话持久的知识资产</text>
+
+      <!-- Tools/世界 -->
+      <rect x="600" y="160" width="130" height="56" rx="8" fill="#f6f8fa" stroke="#8b949e"/>
+      <text x="665" y="183" text-anchor="middle" font-size="13" fill="#24292f">工具 / 外部世界</text>
+      <text x="665" y="201" text-anchor="middle" font-size="11" fill="#57606a">文件、API、浏览器…</text>
+
+      <!-- 箭头 -->
+      <path d="M 130 180 L 296 180" stroke="#57606a" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="213" y="170" text-anchor="middle" font-size="11" fill="#57606a">触发</text>
+
+      <path d="M 380 104 L 380 136" stroke="#0969da" stroke-width="2" marker-end="url(#arrBlue)"/>
+      <text x="440" y="125" text-anchor="middle" font-size="11" fill="#0969da">限定每次推理的视野</text>
+
+      <path d="M 380 276 L 380 240" stroke="#1a7f37" stroke-width="2" marker-end="url(#arr)"/>
+      <text x="452" y="262" text-anchor="middle" font-size="11" fill="#1a7f37">按需注入（渐进披露）</text>
+
+      <path d="M 462 180 L 596 180" stroke="#57606a" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="529" y="170" text-anchor="middle" font-size="11" fill="#57606a">调用</text>
+
+      <path d="M 596 200 C 520 260 480 290 464 308" stroke="#8250df" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+      <text x="585" y="278" text-anchor="middle" font-size="11" fill="#8250df">执行结果沉淀为新 Skill / 修订</text>
+    </svg>
+    <figcaption>图 1：三者关系总览——Skill 注入 Context，Context 驱动 Agent，Agent 的产出反哺 Skill</figcaption>
+  </figure>
+
+  <h2>二、三者角色定位速查</h2>
+  <table>
+    <thead>
+      <tr><th>维度</th><th>LLM Context（上下文）</th><th>Agent（智能体）</th><th>Skill（技能）</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>本质</strong></td><td>一次推理请求的全部输入，Token 序列</td><td>围绕目标循环运行的决策引擎</td><td>固化的程序性知识包（指令 + 资源）</td></tr>
+      <tr><td><strong>认知类比</strong></td><td>工作记忆 / 眼前的桌面</td><td>执行任务的那个人</td><td>SOP 手册 / 肌肉记忆的教材</td></tr>
+      <tr><td><strong>回答的问题</strong></td><td>"模型此刻能看见什么"</td><td>"接下来做什么动作"</td><td>"这类任务该怎么做"</td></tr>
+      <tr><td><strong>生命周期</strong></td><td>请求级，推理结束即消失</td><td>会话级，任务结束即终止</td><td>跨会话持久，可版本管理</td></tr>
+      <tr><td><strong>空间约束</strong></td><td>受上下文窗口上限挤压</td><td>间接受窗口约束（历史 + 工具结果膨胀）</td><td>磁盘上不受限，加载时才占用窗口</td></tr>
+      <tr><td><strong>谁负责构建</strong></td><td>Agent 框架（系统提示、注入策略）</td><td>LLM + 编排循环</td><td>人（或 Agent 帮助下）编写维护</td></tr>
+    </tbody>
+  </table>
+
+  <h2>三、上下文如何影响 Agent 的工作</h2>
+  <p>这是理解三者关系的第一把钥匙：<strong>Agent 的每一次"思考"都是一次无状态的 LLM 推理调用，上下文就是它全部的世界。</strong>模型不会记得上一轮调用，它之所以表现得"有记性、有目标、有方法"，完全是因为编排层把相关信息重新拼进了这次的上下文。</p>
+
+  <h3>3.1 上下文决定了 Agent 的三个边界</h3>
+  <ol>
+    <li><strong>知识边界：它知道什么。</strong>系统提示里的角色与规则、注入的记忆、对话历史中的事实——不进上下文，对 Agent 就等于不存在。</li>
+    <li><strong>能力边界：它能做什么。</strong>工具定义（函数签名、参数说明）必须写进上下文，模型才"知道有这个工具可调用"。上下文里没有的工具，Agent 再强也用不了。</li>
+    <li><strong>行为边界：它怎么做。</strong>约束、风格要求、步骤规范都在上下文里。上下文写"先确认再删除"，Agent 才会先确认；写丢了，它就可能直接删。</li>
+  </ol>
+  <div class="key">
+    <p><strong>推论：Agent 的上限由模型决定，下限由上下文工程决定。</strong>同一个模型、同一个任务，上下文组织得好坏，产出质量可能天差地别——这正是 "Context Engineering"（上下文工程）作为一门实践学科兴起的原因。</p>
+  </div>
+
+  <h3>3.2 Agent 循环中上下文的动态膨胀</h3>
+  <p>Agent 不是一次调用，而是"推理 → 调用工具 → 把工具结果追加进上下文 → 再推理"的循环。这意味着上下文随步数单调增长：</p>
+  <figure class="figure">
+    <svg viewBox="0 0 760 220" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+      <defs>
+        <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#57606a"/>
+        </marker>
+      </defs>
+      <!-- 第 n 轮上下文堆叠 -->
+      <rect x="20" y="20" width="200" height="34" fill="#ddf4ff" stroke="#0969da"/>
+      <text x="120" y="42" text-anchor="middle" font-size="12">第 1 轮：系统提示 + 用户目标</text>
+      <rect x="20" y="60" width="200" height="26" fill="#f6f8fa" stroke="#8b949e"/>
+      <text x="120" y="78" text-anchor="middle" font-size="11">+ 工具定义</text>
+      <rect x="20" y="92" width="200" height="26" fill="#fff8e6" stroke="#d4a72c"/>
+      <text x="120" y="110" text-anchor="middle" font-size="11">+ 模型回复（调用工具 X）</text>
+      <rect x="20" y="124" width="200" height="26" fill="#e4e0f5" stroke="#8250df"/>
+      <text x="120" y="142" text-anchor="middle" font-size="11">+ 工具 X 的返回结果</text>
+      <rect x="20" y="156" width="200" height="26" fill="#fff8e6" stroke="#d4a72c"/>
+      <text x="120" y="174" text-anchor="middle" font-size="11">+ 模型回复（调用工具 Y）…</text>
+      <path d="M 230 110 L 300 110" stroke="#57606a" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <text x="265" y="100" text-anchor="middle" font-size="11" fill="#57606a">送入</text>
+      <!-- LLM -->
+      <circle cx="380" cy="110" r="52" fill="#fff" stroke="#0366d6" stroke-width="2"/>
+      <text x="380" y="106" text-anchor="middle" font-size="14" font-weight="bold" fill="#0366d6">LLM</text>
+      <text x="380" y="124" text-anchor="middle" font-size="11" fill="#57606a">无状态推理</text>
+      <!-- 输出 -->
+      <path d="M 440 110 L 510 110" stroke="#57606a" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <rect x="515" y="70" width="220" height="40" rx="6" fill="#dafbe1" stroke="#1a7f37"/>
+      <text x="625" y="88" text-anchor="middle" font-size="12">下一步动作 / 最终回答</text>
+      <text x="625" y="103" text-anchor="middle" font-size="11" fill="#57606a">结果再追加回左侧堆叠 → 循环</text>
+      <text x="380" y="195" text-anchor="middle" font-size="11" fill="#cf222e">窗口有限：历史越长，留给"当前任务"的空间越少</text>
+    </svg>
+    <figcaption>图 2：Agent 循环中上下文只增不减——每一轮工具结果都被追加，窗口被逐步挤占</figcaption>
+  </figure>
+
+  <h3>3.3 上下文质量问题的四种典型表现</h3>
+  <table>
+    <thead><tr><th>问题</th><th>成因</th><th>对 Agent 的影响</th><th>对策</th></tr></thead>
+    <tbody>
+      <tr><td>关键信息丢失</td><td>早期指令被长历史淹没</td><td>忘记约束，重复犯错或偏离目标</td><td>关键规则放系统提示；定期重申目标</td></tr>
+      <tr><td>注意力稀释</td><td>大量无关 Token 干扰注意力分配</td><td>细节出错、引用错文件</td><td>裁剪工具输出、只注入相关信息</td></tr>
+      <tr><td>窗口溢出</td><td>对话 + 工具结果超出上限</td><td>报错或被强制截断丢上下文</td><td>摘要压缩历史、结果落盘后引用</td></tr>
+      <tr><td>成本失控</td><td>每轮都携带全量历史计费</td><td>长任务费用线性上涨</td><td>同样靠压缩；让中间产物走文件而非上下文</td></tr>
+    </tbody>
+  </table>
+
+  <div class="key">
+    <p><strong>核心心智模型：把上下文当作稀缺资源来做预算管理。</strong>Agent 的编排层本质上是"每轮为模型组装一个最优工作现场"的工程师——什么进、什么出、什么摘要、什么落盘，这些决策统称上下文工程，直接决定 Agent 的可靠性与成本。</p>
+  </div>
+
+  <h2>四、Skill 如何沉淀可复用的任务知识</h2>
+  <p>第二把钥匙在于补齐链条的最后一环：<strong>LLM 无状态、Agent 会话结束即"失忆"，那么"这次任务做得漂亮的方法"如何留下来？答案是 Skill。</strong></p>
+
+  <h3>4.1 没有沉淀时的困境</h3>
+  <p>假设某次你反复调试后总结出"同步这个仓库要先走 API 通道、git 要设 autocrlf=false"——如果不沉淀，下次开新会话，Agent 从零开始，把同样的坑再踩一遍。上下文撑不过一次会话，Memory 适合存"事实与偏好"（是什么），却不是表达"操作流程"（怎么做）的最佳载体。</p>
+
+  <h3>4.2 Skill = 程序性知识的固化</h3>
+  <table>
+    <thead><tr><th>知识类型</th><th>典型载体</th><th>例子</th><th>特点</th></tr></thead>
+    <tbody>
+      <tr><td>陈述性知识（是什么）</td><td>Memory / 文档</td><td>"用户的仓库地址是 X""他偏好简洁回复"</td><td>事实条目，随取随用</td></tr>
+      <tr><td><strong>程序性知识（怎么做）</strong></td><td><strong>Skill</strong></td><td>"同步 GitHub 的五步流程、脚本模板、坑位清单"</td><td>结构化流程 + 可执行资源，可被触发加载</td></tr>
+    </tbody>
+  </table>
+  <p>Skill 把一次成功执行所依赖的<strong>流程步骤、判断标准、脚本模板、注意事项</strong>打包成标准格式（元数据 + SKILL.md 指令 + 资源文件），从而实现：</p>
+  <ul>
+    <li><strong>跨会话复用</strong>：新会话中只要任务匹配触发条件，老经验立即上线；</li>
+    <li><strong>可版本演进</strong>：Skill 是纯文本/代码，可 diff、可回滚、可多人协作；</li>
+    <li><strong>渐进披露、按需占用上下文</strong>：平时只有几行元数据常驻索引；命中任务才加载正文；重资源（脚本、参考文档）只在用到时读取——把第三节说的"上下文预算"花在刀刃上。</li>
+  </ul>
+
+  <h3>4.3 沉淀闭环：从经验到资产</h3>
+  <figure class="figure">
+    <svg viewBox="0 0 760 150" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+      <defs>
+        <marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#57606a"/>
+        </marker>
+      </defs>
+      <rect x="15" y="45" width="120" height="52" rx="8" fill="#f6f8fa" stroke="#8b949e"/>
+      <text x="75" y="66" text-anchor="middle" font-size="12">执行任务</text>
+      <text x="75" y="83" text-anchor="middle" font-size="11" fill="#57606a">Agent 循环完成</text>
+      <rect x="170" y="45" width="120" height="52" rx="8" fill="#fff8e6" stroke="#d4a72c"/>
+      <text x="230" y="66" text-anchor="middle" font-size="12">提炼方法</text>
+      <text x="230" y="83" text-anchor="middle" font-size="11" fill="#57606a">流程/坑位/模板</text>
+      <rect x="325" y="45" width="120" height="52" rx="8" fill="#dafbe1" stroke="#1a7f37"/>
+      <text x="385" y="66" text-anchor="middle" font-size="12">写入 Skill</text>
+      <text x="385" y="83" text-anchor="middle" font-size="11" fill="#57606a">SKILL.md + 资源</text>
+      <rect x="480" y="45" width="120" height="52" rx="8" fill="#ddf4ff" stroke="#0969da"/>
+      <text x="540" y="66" text-anchor="middle" font-size="12">下次触发</text>
+      <text x="540" y="83" text-anchor="middle" font-size="11" fill="#57606a">注入上下文执行</text>
+      <rect x="635" y="45" width="110" height="52" rx="8" fill="#f6f8fa" stroke="#8b949e"/>
+      <text x="690" y="66" text-anchor="middle" font-size="12">反馈修正</text>
+      <text x="690" y="83" text-anchor="middle" font-size="11" fill="#57606a">迭代 Skill</text>
+      <path d="M 135 71 L 166 71" stroke="#57606a" stroke-width="1.5" marker-end="url(#arr3)"/>
+      <path d="M 290 71 L 321 71" stroke="#57606a" stroke-width="1.5" marker-end="url(#arr3)"/>
+      <path d="M 445 71 L 476 71" stroke="#57606a" stroke-width="1.5" marker-end="url(#arr3)"/>
+      <path d="M 600 71 L 631 71" stroke="#57606a" stroke-width="1.5" marker-end="url(#arr3)"/>
+      <path d="M 690 99 C 690 130 75 130 75 99" stroke="#8250df" stroke-width="1.5" fill="none" marker-end="url(#arr3)"/>
+      <text x="382" y="128" text-anchor="middle" font-size="11" fill="#8250df">经验 → 资产 → 更好的执行 → 更新的经验</text>
+    </svg>
+    <figcaption>图 3：知识沉淀闭环——Skill 让 Agent 具备"越用越熟练"的组织级学习曲线</figcaption>
+  </figure>
+
+  <h3>4.4 三层结构与上下文预算的配合</h3>
+  <table>
+    <thead><tr><th>层级</th><th>内容</th><th>何时进入上下文</th><th>占用</th></tr></thead>
+    <tbody>
+      <tr><td>1. 元数据</td><td>name + description（触发条件）</td><td>常驻（进入技能索引）</td><td>几十 Token</td></tr>
+      <tr><td>2. SKILL.md 正文</td><td>流程指令、判断标准、注意事项</td><td>任务命中时加载</td><td>数千 Token</td></tr>
+      <tr><td>3. 资源文件</td><td>脚本、模板、参考文档</td><td>执行中按需读取</td><td>几乎不占（在文件系统里）</td></tr>
+    </tbody>
+  </table>
+  <p>这个分层正是第三节"上下文稀缺"约束下的最优解：<strong>用最小的常驻成本换取最大的按需能力</strong>——这也是 Skill 区别于"把一篇长教程永远塞在系统提示里"的根本所在。</p>
+
+  <h2>五、三者协同：一次任务的完整解剖</h2>
+  <p>以"帮我同步代码到 GitHub"为例，把三个概念放到一条时间线上：</p>
+  <table>
+    <thead><tr><th>时刻</th><th>发生的事</th><th>涉及概念</th></tr></thead>
+    <tbody>
+      <tr><td>t0 触发</td><td>用户说"同步到 GitHub"，编排层匹配到 Skill 的 description → 决定加载</td><td>Skill（第 1 层：元数据路由）</td></tr>
+      <tr><td>t1 装配</td><td>SKILL.md 正文 + 相关工具定义 + 系统提示 + 对话历史拼成推理上下文</td><td>Skill → Context（注入）</td></tr>
+      <tr><td>t2 决策</td><td>LLM 基于上下文判断：先试 push，失败则走 API 通道（步骤写在 Skill 里）</td><td>Context → Agent（视野决定动作）</td></tr>
+      <tr><td>t3 行动</td><td>调用工具执行；工具返回结果被追加进上下文，进入下一轮推理</td><td>Agent ↔ Context（循环膨胀）</td></tr>
+      <tr><td>t4 完成</td><td>任务结束，本次上下文消失；但若流程有改进，可更新 Skill 版本</td><td>Context 消亡，Skill 沉淀</td></tr>
+      <tr><td>t5 下次</td><td>新会话遇到同类任务，Skill 重新注入，经验无损耗复用</td><td>Skill 的复利</td></tr>
+    </tbody>
+  </table>
+
+  <h2>六、常见误区辨析</h2>
+  <div class="pitfall">
+    <p><strong>误区一："上下文窗口很大（200K+），所以不用担心塞满。"</strong> 窗口大 ≠ 注意力好。长上下文中部的信息召回率显著下降（"迷失在中间"效应），且每轮全量历史计费。预算思维不因窗口变大而过时。</p>
+  </div>
+  <div class="pitfall">
+    <p><strong>误区二："Skill 是模型内置的能力。"</strong> Skill 不改变模型权重，它只是"在合适的时机，把正确的操作知识放进上下文"。模型还是那个模型，变的是它眼前桌面上的手册。</p>
+  </div>
+  <div class="pitfall">
+    <p><strong>误区三："有了 Memory 就不需要 Skill。"</strong> Memory 回答"是什么"（事实、偏好），Skill 回答"怎么做"（流程、方法）。让 Agent 从一堆事实记录里现场重新推导操作流程，既不稳定也不经济。</p>
+  </div>
+  <div class="pitfall">
+    <p><strong>误区四："Agent 失败是模型不行。"</strong> 实践中大量失败源于上下文问题——该注入的没注入、工具结果没裁剪、约束被长历史冲掉。排查 Agent 问题时，第一现场永远是"这次推理的上下文里到底有什么"。</p>
+  </div>
+
+  <h2>七、记忆锚点</h2>
+  <ul>
+    <li><span class="tag">桌面</span> Context 是 Agent 眼前的桌面：桌面上的东西决定它能看见、能做什么。</li>
+    <li><span class="tag">循环</span> Agent 的记忆是错觉：每轮都靠重新拼装上下文续命，历史只增不减，需要预算管理。</li>
+    <li><span class="tag">手册</span> Skill 是可版本化的 SOP 手册：把一次做对的方法固化，让下次从 80 分起步。</li>
+    <li><span class="tag">闭环</span> 三者构成飞轮：Skill 注入 Context → Context 驱动 Agent → Agent 产出经验 → 经验升级 Skill。</li>
+  </ul>
+
+  <h2>延伸阅读</h2>
+  <ul>
+    <li><a href="agent.html">Agent 学习资料</a> —— 循环决策引擎的原理与落地</li>
+    <li><a href="llm-context.html">LLM Context 学习资料</a> —— 窗口机制、注意力与上下文工程</li>
+    <li><a href="skill.html">Skill 学习资料</a> —— 技能定义、三层加载与渐进披露</li>
+    <li><a href="moe.html">MoE 学习资料</a> —— 混合专家模型：另一维度的"按需激活"</li>
+  </ul>
+</body>
+</html>
